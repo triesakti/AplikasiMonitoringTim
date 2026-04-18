@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Monitoring Harian Tim</title>
 <style>
+/* --- CSS Tetap Sama Seperti Sebelumnya --- */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0d1117;--surface:#161b27;--card:#1e2540;--card2:#252d4a;
@@ -20,7 +21,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .logo{width:44px;height:44px;background:rgba(79,110,247,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
 .hdr-title{font-size:20px;font-weight:700;color:#fff}
 .nav{display:flex;gap:10px}
-.nav-btn{padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-weight:600}
+.nav-btn{padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-weight:600;transition: 0.3s;}
 .nav-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .main{padding:28px;max-width:900px;margin:0 auto;width:100%}
 .card{background:var(--card);border-radius:var(--radius);padding:24px;margin-bottom:16px;border:1px solid var(--border)}
@@ -35,16 +36,11 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .field textarea{min-height:80px;resize:vertical}
 .check-group{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .check-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted2);cursor:pointer}
-.check-item input{width:16px;height:16px;accent-color:var(--accent)}
 .btn-submit{width:100%;background:linear-gradient(135deg,#4f6ef7,#6384ff);border:none;color:#fff;padding:16px;border-radius:var(--radius-sm);font-size:15px;font-weight:700;cursor:pointer;margin-top:10px}
-.btn-submit:disabled{opacity:0.5}
-
-/* Table Style */
+.btn-submit:disabled{opacity:0.5; cursor: not-allowed;}
 table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
 th{text-align:left;padding:12px;background:rgba(255,255,255,0.03);color:var(--muted);border-bottom:1px solid var(--border)}
 td{padding:12px;border-bottom:1px solid var(--border)}
-.badge{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:700}
-.bg-green{background:rgba(29,158,117,0.2);color:var(--green2)}
 </style>
 </head>
 <body>
@@ -55,18 +51,18 @@ td{padding:12px;border-bottom:1px solid var(--border)}
       <div class="logo">🚀</div>
       <div>
         <div class="hdr-title">Monitoring Tim</div>
-        <div style="font-size:12px;color:var(--muted)">Performance & Daily Activity</div>
+        <div style="font-size:12px;color:var(--muted)">Performance Dashboard</div>
       </div>
     </div>
     <nav class="nav">
-      <div class="nav-btn active" onclick="switchView('form')">Input</div>
-      <div class="nav-btn" onclick="switchView('rekap')">Rekap</div>
+      <button class="nav-btn active" id="nav-form" onclick="switchView('form')">Input</button>
+      <button class="nav-btn" id="nav-rekap" onclick="switchView('rekap')">Rekap</button>
     </nav>
   </header>
 
   <main class="main" id="view-form">
     <div class="card">
-      <div class="card-title">👤 Identitas & Kehadiran</div>
+      <div class="card-title">👤 Identitas</div>
       <div class="form-grid">
         <div class="field">
           <label>Nama Staff</label>
@@ -91,86 +87,122 @@ td{padding:12px;border-bottom:1px solid var(--border)}
     </div>
 
     <div class="card">
-      <div class="card-title">📞 Statistik Leads & Follow-Up</div>
+      <div class="card-title">📞 Leads & Follow-Up</div>
       <div class="form-grid">
-        <div class="field">
-          <label>Leads Baru</label>
-          <input type="number" id="l-baru" value="0">
-        </div>
+        <div class="field"><label>Leads Baru</label><input type="number" id="l-baru" value="0"></div>
         <div class="field">
           <label>Metode Follow-Up</label>
           <select id="f-metode">
-            <option>WhatsApp</option>
-            <option>Telepon</option>
-            <option>Email</option>
-            <option>Tatap Muka</option>
-            <option>Lainnya</option>
+            <option>WhatsApp</option><option>Telepon</option><option>Email</option><option>Tatap Muka</option>
           </select>
         </div>
-        <div class="field">
-          <label>Leads di Follow-Up</label>
-          <input type="number" id="l-fu" value="0">
-        </div>
-        <div class="field">
-          <label>Berhasil Terkonversi</label>
-          <input type="number" id="l-konv" value="0">
-        </div>
+        <div class="field"><label>Leads FU</label><input type="number" id="l-fu" value="0"></div>
+        <div class="field"><label>Konversi</label><input type="number" id="l-konv" value="0"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">✅ Checklist Aktivitas</div>
       <div class="check-group">
-        <label class="check-item"><input type="checkbox" class="f-check" value="Briefing Pagi"> Briefing Pagi</label>
-        <label class="check-item"><input type="checkbox" class="f-check" value="Update Database"> Update Database</label>
-        <label class="check-item"><input type="checkbox" class="f-check" value="Kunjungan Sekolah"> Kunjungan Sekolah</label>
-        <label class="check-item"><input type="checkbox" class="f-check" value="Sosialisasi"> Sosialisasi</label>
+        <label class="check-item"><input type="checkbox" name="act" value="Briefing"> Briefing Pagi</label>
+        <label class="check-item"><input type="checkbox" name="act" value="Database"> Update Database</label>
+        <label class="check-item"><input type="checkbox" name="act" value="Visit"> Kunjungan</label>
+        <label class="check-item"><input type="checkbox" name="act" value="Sosmed"> Sosialisasi</label>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">📝 Laporan, Hambatan & Rencana</div>
-      <div class="field">
-        <label>Tindakan yang Dilakukan</label>
-        <textarea id="f-tindakan" placeholder="Apa yang Anda kerjakan hari ini?"></textarea>
-      </div>
-      <div class="form-grid" style="margin-top:14px">
-        <div class="field">
-          <label>Hambatan</label>
-          <textarea id="f-hambatan" placeholder="Kendala yang dihadapi..."></textarea>
-        </div>
-        <div class="field">
-          <label>Rencana Lanjutan</label>
-          <textarea id="f-rencana" placeholder="Apa rencana besok?"></textarea>
-        </div>
+      <div class="card-title">📝 Detail Laporan</div>
+      <div class="field"><label>Tindakan</label><textarea id="f-tindakan"></textarea></div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="field"><label>Hambatan</label><textarea id="f-hambatan"></textarea></div>
+        <div class="field"><label>Rencana</label><textarea id="f-rencana"></textarea></div>
       </div>
     </div>
 
-    <button class="btn-submit" id="btn-kirim" onclick="submitForm()">Kirim Laporan Harian</button>
+    <button class="btn-submit" id="btn-kirim" onclick="handleKirim()">Kirim Laporan Harian</button>
   </main>
 
   <main class="main" id="view-rekap" style="display:none">
     <div class="card">
-      <div class="card-title">📊 Rekap Progress Terkini</div>
-      <div style="overflow-x:auto">
-        <table id="table-rekap">
-          <thead>
-            <tr>
-              <th>Nama</th>
-              <th>Status</th>
-              <th>Leads</th>
-              <th>Konversi</th>
-              <th>Progress</th>
-            </tr>
-          </thead>
-          <tbody id="rekap-body">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Memuat data...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="card-title">📊 Rekap Data</div>
+      <table id="table-rekap">
+        <thead><tr><th>Nama</th><th>Status</th><th>Leads</th><th>Aksi</th></tr></thead>
+        <tbody id="rekap-body">
+          <tr><td colspan="4" style="text-align:center">Pilih menu "Rekap" untuk melihat data.</td></tr>
+        </tbody>
+      </table>
     </div>
   </main>
 </div>
 
 <script>
-const API_URL = '
+const API_URL = 'https://script.google.com/macros/s/AKfycbweXWWwUB2vSKQ3NYusggt6NFeZkrQv3NCvIHT4xPg39MVj_tU0fcJLM5yZ_11J3QRR/exec';
+
+// FUNGSI GANTI MENU (INPUT / REKAP)
+function switchView(target) {
+  const viewForm = document.getElementById('view-form');
+  const viewRekap = document.getElementById('view-rekap');
+  const btnForm = document.getElementById('nav-form');
+  const btnRekap = document.getElementById('nav-rekap');
+
+  if (target === 'form') {
+    viewForm.style.display = 'block';
+    viewRekap.style.display = 'none';
+    btnForm.classList.add('active');
+    btnRekap.classList.remove('active');
+  } else {
+    viewForm.style.display = 'none';
+    viewRekap.style.display = 'block';
+    btnRekap.classList.add('active');
+    btnForm.classList.remove('active');
+  }
+}
+
+// FUNGSI KIRIM DATA
+async function handleKirim() {
+  const btn = document.getElementById('btn-kirim');
+  const nama = document.getElementById('f-nama').value;
+  
+  if (!nama) {
+    alert("Silakan pilih Nama Staff!");
+    return;
+  }
+
+  // Kumpulkan checklist
+  const checks = Array.from(document.querySelectorAll('input[name="act"]:checked'))
+                      .map(c => c.value).join(', ');
+
+  const payload = {
+    nama: nama,
+    status: document.getElementById('f-status').value,
+    metode: document.getElementById('f-metode').value,
+    leadsBaru: document.getElementById('l-baru').value,
+    leadsFU: document.getElementById('l-fu').value,
+    leadsKonv: document.getElementById('l-konv').value,
+    checklist: checks,
+    tindakan: document.getElementById('f-tindakan').value,
+    hambatan: document.getElementById('f-hambatan').value,
+    rencana: document.getElementById('f-rencana').value
+  };
+
+  btn.disabled = true;
+  btn.innerHTML = 'Sedang Mengirim...';
+
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify(payload)
+    });
+    alert('✅ Laporan Berhasil Dikirim!');
+    window.location.reload(); // Refresh setelah sukses
+  } catch (err) {
+    alert('❌ Gagal mengirim: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Kirim Laporan Harian';
+  }
+}
+</script>
+</body>
+</html>
