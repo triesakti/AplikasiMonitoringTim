@@ -2,10 +2,24 @@
 // ══════════════════════════════════════════════════════════
 //  KONFIGURASI — Ganti URL di bawah dengan Apps Script URL
 // ══════════════════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbwabkKU4HyGCCsyaHJJffP_g8u4_m27cY0Z7b6msYDN2SoZMHlm8KVzrgdYeQYR-86SGw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwFRoICLD6RYisLM5qfDhXfIVlz9y4sUn1dfDgAzLgmKYQpMECDw35AvslZu5kySIPdTg/exec';
 
-// Flag untuk cek apakah sudah terhubung ke server
-const IS_CONNECTED = API_URL && !API_URL.includes('https://script.google.com/macros/s/AKfycbwabkKU4HyGCCsyaHJJffP_g8u4_m27cY0Z7b6msYDN2SoZMHlm8KVzrgdYeQYR-86SGw/exec') && API_URL.includes('script.google.com');
+// Check apakah URL sudah valid
+const IS_CONNECTED = (function() {
+  try {
+    return API_URL && 
+           typeof API_URL === 'string' && 
+           API_URL.length > 10 &&
+           !API_URL.includes('GANTI_DENGAN_URL') && 
+           API_URL.includes('script.google.com');
+  } catch(e) {
+    return false;
+  }
+})();
+
+// Debug log
+console.log('API_URL:', API_URL);
+console.log('IS_CONNECTED:', IS_CONNECTED);
 
 // ─── Avatar Colors ────────────────────────────────────────
 const AV_COLORS = [
@@ -17,415 +31,598 @@ const AV_COLORS = [
   {bg:'rgba(30,143,255,.2)',c:'#7bc4ff'},
 ];
 function avColor(i){return AV_COLORS[i % AV_COLORS.length];}
-function initials(n){return n.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();}
+function initials(n){return n ? n.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : '--';}
 
 // ─── Toast ────────────────────────────────────────────────
 function toast(msg, isErr=false){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.className='toast'+(isErr?' error':'');
-  t.style.display='block';
-  setTimeout(()=>t.style.display='none', 3000);
+  try {
+    const t=document.getElementById('toast');
+    if(!t) return;
+    t.textContent=msg; 
+    t.className='toast'+(isErr?' error':'');
+    t.style.display='block';
+    setTimeout(()=>{if(t) t.style.display='none'}, 3000);
+  } catch(e) {
+    console.error('Toast error:', e);
+  }
 }
 
 // ─── CVR helper ───────────────────────────────────────────
 function cvrClass(v){
-  if(v>=70) return {cls:'b-green', bar:'prog-green'};
-  if(v>=40) return {cls:'b-yellow', bar:'prog-yellow'};
+  const val = parseFloat(v) || 0;
+  if(val>=70) return {cls:'b-green', bar:'prog-green'};
+  if(val>=40) return {cls:'b-yellow', bar:'prog-yellow'};
   return {cls:'b-red', bar:'prog-red'};
 }
 function cvrLabel(v){
-  if(v>=70) return '🎯 Tinggi';
-  if(v>=40) return '📈 Sedang';
+  const val = parseFloat(v) || 0;
+  if(val>=70) return '🎯 Tinggi';
+  if(val>=40) return '📈 Sedang';
   return '⚠️ Rendah';
 }
 
 // ─── Status badge ─────────────────────────────────────────
 function statusBadge(s){
   const m={'Hadir di kantor':'b-hadir','WFH dengan izin Manager':'b-wfh','Izin':'b-izin','Sakit':'b-sakit','Cuti':'b-izin'};
-  return `<span class="badge ${m[s]||'b-hadir'}">${s}</span>`;
+  return `<span class="badge ${m[s]||'b-hadir'}">${s||'—'}</span>`;
 }
 
 // ─── Init ─────────────────────────────────────────────────
 async function init(){
-  document.getElementById('f-tgl').value = new Date().toISOString().split('T')[0];
-  
-  // Update notice visibility
-  const notice = document.getElementById('cfg-notice');
-  if(IS_CONNECTED) {
-    notice.style.display = 'none';
+  try {
+    console.log('Init started...');
+    
+    // Set tanggal default
+    const tglInput = document.getElementById('f-tgl');
+    if(tglInput) {
+      tglInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Sembunyikan notice jika terhubung
+    const notice = document.getElementById('cfg-notice');
+    if(notice && IS_CONNECTED) {
+      notice.style.display = 'none';
+    }
+    
+    // Load staff
+    await loadStaff();
+    
+    // Setup CVR preview listeners
+    const fuInput = document.getElementById('l-fu');
+    const konvInput = document.getElementById('l-konv');
+    if(fuInput && konvInput) {
+      fuInput.addEventListener('input', updateCVRPreview);
+      konvInput.addEventListener('input', updateCVRPreview);
+    }
+    
+    console.log('Init completed successfully');
+  } catch(err) {
+    console.error('Init error:', err);
+    toast('Error inisialisasi: ' + err.message, true);
   }
-  
-  await loadStaff();
-
-  // Live CVR preview
-  ['l-fu','l-konv'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', updateCVRPreview);
-  });
 }
 
 // ─── Load Staff ───────────────────────────────────────────
 async function loadStaff(){
-  const sel = document.getElementById('f-nama');
-  const flt = document.getElementById('flt-nama');
-  const defaults = ['Bella Sintia','Irfandi Nyondri','Kasmira','Salma'];
-
-  // Merge defaults + locally added staff
-  const localExtra = JSON.parse(localStorage.getItem('akt-staff-extra')||'[]');
-  let names = [...defaults, ...localExtra.filter(n=>!defaults.includes(n))];
-
-  if(IS_CONNECTED){
-    try{
-      const res = await fetch(`${API_URL}?action=staff`);
-      const json = await res.json();
-      if(json.ok && json.data.length) {
-        names = json.data.map(s=>s['Nama Staff'] || s.nama || s[0]);
-        toast('✓ Terhubung ke Google Sheets');
-      }
-    }catch(e){
-      toast('⚠️ Gagal terhubung ke server, menggunakan data lokal', true);
-      console.error('Error loading staff:', e);
+  try {
+    const sel = document.getElementById('f-nama');
+    const flt = document.getElementById('flt-nama');
+    
+    if(!sel || !flt) {
+      console.warn('Staff select elements not found');
+      return;
     }
-  }
+    
+    const defaults = ['Bella Sintia','Irfandi Nyondri','Kasmira','Salma'];
+    const localExtra = JSON.parse(localStorage.getItem('akt-staff-extra')||'[]');
+    let names = [...defaults, ...localExtra.filter(n=>!defaults.includes(n))];
 
-  sel.innerHTML = '<option value="">Pilih nama staff</option>' + names.map(n=>`<option>${n}</option>`).join('');
-  flt.innerHTML = '<option value="">Semua Staff</option>' + names.map(n=>`<option>${n}</option>`).join('');
+    if(IS_CONNECTED){
+      try{
+        console.log('Fetching staff from API...');
+        const res = await fetch(`${API_URL}?action=staff`);
+        const json = await res.json();
+        if(json.ok && json.data && json.data.length) {
+          names = json.data.map(s=>s['Nama Staff'] || s.nama || s[0]).filter(n=>n);
+          toast('✓ Terhubung ke Google Sheets');
+        }
+      }catch(e){
+        console.warn('API fetch failed, using local data:', e);
+        toast('⚠️ Gagal terhubung ke server, menggunakan data lokal', true);
+      }
+    }
+
+    const optionsHTML = names.map(n=>`<option>${n}</option>`).join('');
+    sel.innerHTML = '<option value="">Pilih nama staff</option>' + optionsHTML;
+    flt.innerHTML = '<option value="">Semua Staff</option>' + optionsHTML;
+    
+  } catch(err) {
+    console.error('Load staff error:', err);
+  }
 }
 
 // ─── Toggle Add Staff Panel ───────────────────────────────
 function toggleAddStaff(){
-  const panel = document.getElementById('add-staff-panel');
-  const show = panel.style.display === 'none';
-  panel.style.display = show ? '' : 'none';
-  if(show) document.getElementById('new-staff-nama').focus();
+  try {
+    const panel = document.getElementById('add-staff-panel');
+    if(!panel) return;
+    const show = panel.style.display === 'none';
+    panel.style.display = show ? '' : 'none';
+    if(show) {
+      const input = document.getElementById('new-staff-nama');
+      if(input) input.focus();
+    }
+  } catch(err) {
+    console.error('Toggle panel error:', err);
+  }
 }
 
 // ─── Tambah Staff Baru ────────────────────────────────────
 async function tambahStaff(){
-  const nama = document.getElementById('new-staff-nama').value.trim();
-  const jabatan = document.getElementById('new-staff-jabatan').value.trim();
-  if(!nama){ toast('⚠️ Nama staff harus diisi!', true); return; }
-
-  // Save to API if connected
-  if(IS_CONNECTED){
-    try{
-      const res = await fetch(API_URL, { 
-        method:'POST', 
-        body: JSON.stringify({ action:'save_staff', nama, jabatan }),
-        headers: {'Content-Type': 'application/json'}
-      });
-      const json = await res.json();
-      if(!json.ok) throw new Error(json.error);
-    }catch(e){
-      toast('⚠️ Gagal simpan ke server, menyimpan lokal saja', true);
-      console.error('Error saving staff:', e);
+  try {
+    const namaInput = document.getElementById('new-staff-nama');
+    const jabatanInput = document.getElementById('new-staff-jabatan');
+    
+    if(!namaInput) return;
+    
+    const nama = namaInput.value.trim();
+    const jabatan = jabatanInput ? jabatanInput.value.trim() : '';
+    
+    if(!nama){ 
+      toast('⚠️ Nama staff harus diisi!', true); 
+      return; 
     }
+
+    // Save to API if connected
+    if(IS_CONNECTED){
+      try{
+        await fetch(API_URL, { 
+          method:'POST', 
+          body: JSON.stringify({ action:'save_staff', nama, jabatan }),
+          headers: {'Content-Type': 'application/json'}
+        });
+      }catch(e){
+        console.warn('Save staff to API failed:', e);
+      }
+    }
+
+    // Always save locally too
+    const extra = JSON.parse(localStorage.getItem('akt-staff-extra')||'[]');
+    if(!extra.includes(nama)){ 
+      extra.push(nama); 
+      localStorage.setItem('akt-staff-extra', JSON.stringify(extra)); 
+    }
+
+    namaInput.value='';
+    if(jabatanInput) jabatanInput.value='';
+    
+    const panel = document.getElementById('add-staff-panel');
+    if(panel) panel.style.display='none';
+    
+    await loadStaff();
+
+    // Auto-select the new staff
+    const sel = document.getElementById('f-nama');
+    if(sel) sel.value = nama;
+    
+    toast(`✓ Staff "${nama}" berhasil ditambahkan`);
+  } catch(err) {
+    console.error('Tambah staff error:', err);
+    toast('Error menambah staff: ' + err.message, true);
   }
-
-  // Always save locally too
-  const extra = JSON.parse(localStorage.getItem('akt-staff-extra')||'[]');
-  if(!extra.includes(nama)){ extra.push(nama); localStorage.setItem('akt-staff-extra', JSON.stringify(extra)); }
-
-  document.getElementById('new-staff-nama').value='';
-  document.getElementById('new-staff-jabatan').value='';
-  document.getElementById('add-staff-panel').style.display='none';
-  await loadStaff();
-
-  // Auto-select the new staff
-  document.getElementById('f-nama').value = nama;
-  toast(`✓ Staff "${nama}" berhasil ditambahkan`);
 }
 
 // ─── CVR Preview (realtime) ───────────────────────────────
 function updateCVRPreview(){
-  const fu   = parseInt(document.getElementById('l-fu').value)||0;
-  const konv = parseInt(document.getElementById('l-konv').value)||0;
-  const wrap = document.getElementById('cvr-preview');
-  if(fu===0 && konv===0){wrap.style.display='none';return;}
-  wrap.style.display='block';
-  const pct = fu>0 ? Math.round(konv/fu*100) : 0;
-  const {cls,bar} = cvrClass(pct);
-  document.getElementById('cvr-val').textContent = pct+'%';
-  document.getElementById('cvr-badge').className = `badge ${cls}`;
-  document.getElementById('cvr-badge').textContent = cvrLabel(pct);
-  const b = document.getElementById('cvr-bar');
-  b.style.width = Math.min(pct,100)+'%';
-  b.className = `progress-bar ${bar}`;
+  try {
+    const fuInput = document.getElementById('l-fu');
+    const konvInput = document.getElementById('l-konv');
+    const wrap = document.getElementById('cvr-preview');
+    
+    if(!fuInput || !konvInput || !wrap) return;
+    
+    const fu   = parseInt(fuInput.value)||0;
+    const konv = parseInt(konvInput.value)||0;
+    
+    if(fu===0 && konv===0){
+      wrap.style.display='none';
+      return;
+    }
+    
+    wrap.style.display='block';
+    const pct = fu>0 ? Math.round(konv/fu*100) : 0;
+    const {cls,bar} = cvrClass(pct);
+    
+    const cvrVal = document.getElementById('cvr-val');
+    const cvrBadge = document.getElementById('cvr-badge');
+    const cvrBar = document.getElementById('cvr-bar');
+    
+    if(cvrVal) cvrVal.textContent = pct+'%';
+    if(cvrBadge) {
+      cvrBadge.className = `badge ${cls}`;
+      cvrBadge.textContent = cvrLabel(pct);
+    }
+    if(cvrBar) {
+      cvrBar.style.width = Math.min(pct,100)+'%';
+      cvrBar.className = `progress-bar ${bar}`;
+    }
+  } catch(err) {
+    console.error('CVR preview error:', err);
+  }
 }
 
 // ─── Show View ────────────────────────────────────────────
 function showView(v){
-  document.getElementById('view-form').style.display  = v==='form'?'':'none';
-  document.getElementById('view-rekap').style.display = v==='rekap'?'':'none';
-  document.getElementById('btn-form').classList.toggle('active', v==='form');
-  document.getElementById('btn-rekap').classList.toggle('active', v==='rekap');
-  if(v==='rekap') loadRekap();
+  try {
+    const viewForm = document.getElementById('view-form');
+    const viewRekap = document.getElementById('view-rekap');
+    const btnForm = document.getElementById('btn-form');
+    const btnRekap = document.getElementById('btn-rekap');
+    
+    if(viewForm) viewForm.style.display = v==='form'?'':'none';
+    if(viewRekap) viewRekap.style.display = v==='rekap'?'':'none';
+    if(btnForm) btnForm.classList.toggle('active', v==='form');
+    if(btnRekap) btnRekap.classList.toggle('active', v==='rekap');
+    
+    if(v==='rekap') loadRekap();
+  } catch(err) {
+    console.error('Show view error:', err);
+  }
 }
 
 // ─── Submit Form ──────────────────────────────────────────
 async function submitForm(){
-  const nama   = document.getElementById('f-nama').value;
-  const status = document.getElementById('f-status').value;
-  if(!nama)  { toast('⚠️ Nama staff wajib dipilih!', true); return; }
-  if(!status){ toast('⚠️ Status kehadiran wajib dipilih!', true); return; }
-
-  const btn = document.getElementById('btn-kirim');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Mengirim...';
-
-  const payload = {
-    action:'save',
-    id: Date.now().toString(),
-    nama, 
-    tgl: document.getElementById('f-tgl').value, 
-    status,
-    lBaru:  parseInt(document.getElementById('l-baru').value)||0,
-    lFu:    parseInt(document.getElementById('l-fu').value)||0,
-    lHasil: parseInt(document.getElementById('l-hasil').value)||0,
-    lKonv:  parseInt(document.getElementById('l-konv').value)||0,
-    metode:    [...document.querySelectorAll('.fu-cb:checked')].map(c=>c.value),
-    tindakan:  document.getElementById('f-tindakan').value,
-    aktivitas: [...document.querySelectorAll('.ak-cb:checked')].map(c=>c.value),
-    aktLain:   document.getElementById('f-aktlain').value,
-    hambatan:  document.getElementById('f-hambatan').value,
-    rencana:   document.getElementById('f-rencana').value,
-  };
-
-  let saved = false;
-  
-  if(IS_CONNECTED){
-    try{
-      const res  = await fetch(API_URL, { 
-        method:'POST', 
-        body: JSON.stringify(payload),
-        headers: {'Content-Type': 'application/json'}
-      });
-      const json = await res.json();
-      if(json.ok) {
-        saved = true;
-        toast('✓ Laporan berhasil dikirim ke Google Sheets!');
-      } else {
-        throw new Error(json.error);
-      }
-    }catch(ex){
-      toast('❌ Gagal mengirim ke server: '+ex.message, true);
-      console.error('Submit error:', ex);
+  try {
+    const namaSel = document.getElementById('f-nama');
+    const statusSel = document.getElementById('f-status');
+    
+    if(!namaSel || !statusSel) {
+      toast('Error: Form elements not found', true);
+      return;
     }
-  } else {
-    // Offline mode — save to localStorage for demo
-    const stored = JSON.parse(localStorage.getItem('akt-reports')||'[]');
-    stored.push({ ...payload, Timestamp: new Date().toLocaleString('id-ID') });
-    localStorage.setItem('akt-reports', JSON.stringify(stored));
-    saved = true;
-    toast('✓ Laporan tersimpan (Mode Offline)');
-  }
+    
+    const nama   = namaSel.value;
+    const status = statusSel.value;
+    
+    if(!nama)  { toast('⚠️ Nama staff wajib dipilih!', true); return; }
+    if(!status){ toast('⚠️ Status kehadiran wajib dipilih!', true); return; }
 
-  if(saved){
-    // Reset form
-    document.getElementById('f-nama').value='';
-    document.getElementById('f-status').value='';
-    ['l-baru','l-fu','l-hasil','l-konv'].forEach(id=>document.getElementById(id).value=0);
-    document.getElementById('f-tindakan').value='';
-    document.getElementById('f-aktlain').value='';
-    document.getElementById('f-hambatan').value='';
-    document.getElementById('f-rencana').value='';
-    document.querySelectorAll('.fu-cb,.ak-cb').forEach(c=>c.checked=false);
-    document.getElementById('cvr-preview').style.display='none';
+    const btn = document.getElementById('btn-kirim');
+    if(btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Mengirim...';
+    }
+
+    const payload = {
+      action:'save',
+      id: Date.now().toString(),
+      nama, 
+      tgl: document.getElementById('f-tgl')?.value || new Date().toISOString().split('T')[0], 
+      status,
+      lBaru:  parseInt(document.getElementById('l-baru')?.value)||0,
+      lFu:    parseInt(document.getElementById('l-fu')?.value)||0,
+      lHasil: parseInt(document.getElementById('l-hasil')?.value)||0,
+      lKonv:  parseInt(document.getElementById('l-konv')?.value)||0,
+      metode:    [...document.querySelectorAll('.fu-cb:checked')].map(c=>c.value),
+      tindakan:  document.getElementById('f-tindakan')?.value || '',
+      aktivitas: [...document.querySelectorAll('.ak-cb:checked')].map(c=>c.value),
+      aktLain:   document.getElementById('f-aktlain')?.value || '',
+      hambatan:  document.getElementById('f-hambatan')?.value || '',
+      rencana:   document.getElementById('f-rencana')?.value || '',
+    };
+
+    let saved = false;
+    
+    if(IS_CONNECTED){
+      try{
+        const res  = await fetch(API_URL, { 
+          method:'POST', 
+          body: JSON.stringify(payload),
+          headers: {'Content-Type': 'application/json'}
+        });
+        const json = await res.json();
+        if(json.ok) {
+          saved = true;
+          toast('✓ Laporan berhasil dikirim ke Google Sheets!');
+        } else {
+          throw new Error(json.error || 'Unknown error');
+        }
+      }catch(ex){
+        console.error('Submit error:', ex);
+        toast('❌ Gagal mengirim ke server: '+ex.message, true);
+      }
+    } else {
+      // Offline mode
+      const stored = JSON.parse(localStorage.getItem('akt-reports')||'[]');
+      stored.push({ ...payload, Timestamp: new Date().toLocaleString('id-ID') });
+      localStorage.setItem('akt-reports', JSON.stringify(stored));
+      saved = true;
+      toast('✓ Laporan tersimpan (Mode Offline)');
+    }
+
+    if(saved){
+      // Reset form
+      namaSel.value='';
+      statusSel.value='';
+      ['l-baru','l-fu','l-hasil','l-konv'].forEach(id=>{
+        const el = document.getElementById(id);
+        if(el) el.value=0;
+      });
+      const tindakan = document.getElementById('f-tindakan');
+      const aktlain = document.getElementById('f-aktlain');
+      const hambatan = document.getElementById('f-hambatan');
+      const rencana = document.getElementById('f-rencana');
+      
+      if(tindakan) tindakan.value='';
+      if(aktlain) aktlain.value='';
+      if(hambatan) hambatan.value='';
+      if(rencana) rencana.value='';
+      
+      document.querySelectorAll('.fu-cb,.ak-cb').forEach(c=>c.checked=false);
+      
+      const cvrPreview = document.getElementById('cvr-preview');
+      if(cvrPreview) cvrPreview.style.display='none';
+    }
+    
+    if(btn) {
+      btn.disabled=false; 
+      btn.innerHTML='Kirim Laporan';
+    }
+  } catch(err) {
+    console.error('Submit form error:', err);
+    toast('Error: ' + err.message, true);
+    
+    const btn = document.getElementById('btn-kirim');
+    if(btn) {
+      btn.disabled=false; 
+      btn.innerHTML='Kirim Laporan';
+    }
   }
-  
-  btn.disabled=false; 
-  btn.innerHTML='Kirim Laporan';
 }
 
 // ─── Load Rekap ───────────────────────────────────────────
 async function loadRekap(){
-  const nama   = document.getElementById('flt-nama').value;
-  const dari   = document.getElementById('flt-dari').value;
-  const sampai = document.getElementById('flt-sampai').value;
+  try {
+    const namaSel = document.getElementById('flt-nama');
+    const dariInput = document.getElementById('flt-dari');
+    const sampaiInput = document.getElementById('flt-sampai');
+    
+    const nama   = namaSel ? namaSel.value : '';
+    const dari   = dariInput ? dariInput.value : '';
+    const sampai = sampaiInput ? sampaiInput.value : '';
 
-  document.getElementById('staff-cards').innerHTML='<div class="empty" style="grid-column:1/-1"><span class="spinner"></span>Memuat...</div>';
-
-  let reports = [], summary = {};
-
-  if(IS_CONNECTED){
-    try{
-      const url  = `${API_URL}?action=rekap&nama=${encodeURIComponent(nama)}&dari=${dari}&sampai=${sampai}`;
-      const res  = await fetch(url);
-      const json = await res.json();
-      if(json.ok){ 
-        reports = json.data.stats; 
-        summary = json.data.summary; 
-      } else {
-        throw new Error(json.error);
-      }
-    }catch(ex){ 
-      toast('❌ Gagal memuat data: '+ex.message, true); 
-      console.error('Load rekap error:', ex);
+    const staffCards = document.getElementById('staff-cards');
+    if(staffCards) {
+      staffCards.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="spinner"></span>Memuat...</div>';
     }
-  } else {
-    // Offline mode
-    let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
-    if(nama) all = all.filter(r=>r.nama===nama);
-    const byStaff={};
-    all.forEach(r=>{
-      if(!byStaff[r.nama]) byStaff[r.nama]={nama:r.nama,laporan:0,lBaru:0,lFu:0,lHasil:0,lKonv:0};
-      byStaff[r.nama].laporan++;
-      byStaff[r.nama].lBaru  +=parseInt(r.lBaru)||0;
-      byStaff[r.nama].lFu    +=parseInt(r.lFu)||0;
-      byStaff[r.nama].lHasil +=parseInt(r.lHasil)||0;
-      byStaff[r.nama].lKonv  +=parseInt(r.lKonv)||0;
-    });
-    reports = Object.values(byStaff).map(s=>({
-      ...s,
-      cvr:   s.lFu>0?((s.lKonv/s.lFu)*100).toFixed(1):'0.0',
-      fuRate:s.lBaru>0?((s.lFu/s.lBaru)*100).toFixed(1):'0.0'
-    }));
-    const totBaru=all.reduce((a,r)=>a+(parseInt(r.lBaru)||0),0);
-    const totFu=all.reduce((a,r)=>a+(parseInt(r.lFu)||0),0);
-    const totKonv=all.reduce((a,r)=>a+(parseInt(r.lKonv)||0),0);
-    summary={totalLaporan:all.length,totBaru,totFu,totKonv,cvrTotal:totFu>0?((totKonv/totFu)*100).toFixed(1):'0.0'};
-  }
 
-  renderStats(summary);
-  renderStaffCards(reports);
-  await renderTable(nama, dari, sampai);
+    let reports = [], summary = {};
+
+    if(IS_CONNECTED){
+      try{
+        const url  = `${API_URL}?action=rekap&nama=${encodeURIComponent(nama)}&dari=${dari}&sampai=${sampai}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+        if(json.ok && json.data){ 
+          reports = json.data.stats || []; 
+          summary = json.data.summary || {}; 
+        } else {
+          throw new Error(json.error || 'Failed to load');
+        }
+      }catch(ex){ 
+        console.error('Load rekap error:', ex);
+        toast('❌ Gagal memuat data: '+ex.message, true); 
+      }
+    } else {
+      // Offline mode
+      let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
+      if(nama) all = all.filter(r=>r.nama===nama);
+      const byStaff={};
+      all.forEach(r=>{
+        if(!byStaff[r.nama]) byStaff[r.nama]={nama:r.nama,laporan:0,lBaru:0,lFu:0,lHasil:0,lKonv:0};
+        byStaff[r.nama].laporan++;
+        byStaff[r.nama].lBaru  +=parseInt(r.lBaru)||0;
+        byStaff[r.nama].lFu    +=parseInt(r.lFu)||0;
+        byStaff[r.nama].lHasil +=parseInt(r.lHasil)||0;
+        byStaff[r.nama].lKonv  +=parseInt(r.lKonv)||0;
+      });
+      reports = Object.values(byStaff).map(s=>({
+        ...s,
+        cvr:   s.lFu>0?((s.lKonv/s.lFu)*100).toFixed(1):'0.0',
+        fuRate:s.lBaru>0?((s.lFu/s.lBaru)*100).toFixed(1):'0.0'
+      }));
+      const totBaru=all.reduce((a,r)=>a+(parseInt(r.lBaru)||0),0);
+      const totFu=all.reduce((a,r)=>a+(parseInt(r.lFu)||0),0);
+      const totKonv=all.reduce((a,r)=>a+(parseInt(r.lKonv)||0),0);
+      summary={totalLaporan:all.length,totBaru,totFu,totKonv,cvrTotal:totFu>0?((totKonv/totFu)*100).toFixed(1):'0.0'};
+    }
+
+    renderStats(summary);
+    renderStaffCards(reports);
+    await renderTable(nama, dari, sampai);
+  } catch(err) {
+    console.error('Load rekap error:', err);
+  }
 }
 
 // ─── Render Stats ─────────────────────────────────────────
 function renderStats(s){
-  const pct = parseFloat(s.cvrTotal||0);
-  const {cls} = cvrClass(pct);
-  document.getElementById('stats-row').innerHTML=`
-    <div class="stat-c"><div class="stat-v">${s.totalLaporan||0}</div><div class="stat-l">Total Laporan</div></div>
-    <div class="stat-c"><div class="stat-v">${s.totBaru||0}</div><div class="stat-l">Leads Baru</div></div>
-    <div class="stat-c"><div class="stat-v">${s.totFu||0}</div><div class="stat-l">Di-Follow-up</div></div>
-    <div class="stat-c"><div class="stat-v">${s.totKonv||0}</div><div class="stat-l">Terkonversi</div></div>
-    <div class="stat-c">
-      <div class="stat-v" style="font-size:20px"><span class="badge ${cls}" style="font-size:16px;padding:4px 14px">${pct}%</span></div>
-      <div class="stat-l">Conversion Rate</div>
-    </div>
-  `;
+  try {
+    const statsRow = document.getElementById('stats-row');
+    if(!statsRow) return;
+    
+    const pct = parseFloat(s?.cvrTotal||0);
+    const {cls} = cvrClass(pct);
+    
+    statsRow.innerHTML=`
+      <div class="stat-c"><div class="stat-v">${s?.totalLaporan||0}</div><div class="stat-l">Total Laporan</div></div>
+      <div class="stat-c"><div class="stat-v">${s?.totBaru||0}</div><div class="stat-l">Leads Baru</div></div>
+      <div class="stat-c"><div class="stat-v">${s?.totFu||0}</div><div class="stat-l">Di-Follow-up</div></div>
+      <div class="stat-c"><div class="stat-v">${s?.totKonv||0}</div><div class="stat-l">Terkonversi</div></div>
+      <div class="stat-c">
+        <div class="stat-v" style="font-size:20px"><span class="badge ${cls}" style="font-size:16px;padding:4px 14px">${pct}%</span></div>
+        <div class="stat-l">Conversion Rate</div>
+      </div>
+    `;
+  } catch(err) {
+    console.error('Render stats error:', err);
+  }
 }
 
 // ─── Render Staff Cards ────────────────────────────────────
 function renderStaffCards(list){
-  const el = document.getElementById('staff-cards');
-  if(!list.length){ el.innerHTML='<div class="empty" style="grid-column:1/-1">Belum ada data laporan</div>'; return; }
-  el.innerHTML = list.map((s,i)=>{
-    const av   = avColor(i);
-    const pct  = parseFloat(s.cvr||0);
-    const fuR  = parseFloat(s.fuRate||0);
-    const {cls, bar} = cvrClass(pct);
-    return `<div class="staff-card">
-      <div class="staff-top">
-        <div class="avatar" style="background:${av.bg};color:${av.c}">${initials(s.nama)}</div>
-        <div>
-          <div class="staff-name">${s.nama}</div>
-          <div class="staff-laporan">${s.laporan} laporan dikirim</div>
-        </div>
-      </div>
-      <div class="staff-metrics">
-        <div class="m-item"><div class="m-val">${s.lBaru}</div><div class="m-lbl">Leads Baru</div></div>
-        <div class="m-item"><div class="m-val">${s.lFu}</div><div class="m-lbl">Di-Follow-up</div></div>
-        <div class="m-item"><div class="m-val">${s.lHasil}</div><div class="m-lbl">Hasil FU</div></div>
-        <div class="m-item"><div class="m-val">${s.lKonv}</div><div class="m-lbl">Terkonversi</div></div>
-      </div>
-      <div class="cvr-row">
-        <div class="cvr-label">
-          <span>Conversion Rate (FU → Daftar)</span>
-          <span class="cvr-pct">${pct}% <span class="badge ${cls}" style="font-size:10px;padding:2px 8px">${cvrLabel(pct)}</span></span>
-        </div>
-        <div class="progress-wrap"><div class="progress-bar ${bar}" style="width:${Math.min(pct,100)}%"></div></div>
-        <div style="margin-top:8px">
-          <div class="cvr-label">
-            <span>Follow-up Rate (Baru → FU)</span>
-            <span class="cvr-pct">${fuR}%</span>
+  try {
+    const el = document.getElementById('staff-cards');
+    if(!el) return;
+    
+    if(!list || !list.length){ 
+      el.innerHTML='<div class="empty" style="grid-column:1/-1">Belum ada data laporan</div>'; 
+      return; 
+    }
+    
+    el.innerHTML = list.map((s,i)=>{
+      const av   = avColor(i);
+      const pct  = parseFloat(s?.cvr||0);
+      const fuR  = parseFloat(s?.fuRate||0);
+      const {cls, bar} = cvrClass(pct);
+      
+      return `<div class="staff-card">
+        <div class="staff-top">
+          <div class="avatar" style="background:${av.bg};color:${av.c}">${initials(s?.nama)}</div>
+          <div>
+            <div class="staff-name">${s?.nama||'—'}</div>
+            <div class="staff-laporan">${s?.laporan||0} laporan dikirim</div>
           </div>
-          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(fuR,100)}%;background:var(--accent)"></div></div>
         </div>
-      </div>
-    </div>`;
-  }).join('');
+        <div class="staff-metrics">
+          <div class="m-item"><div class="m-val">${s?.lBaru||0}</div><div class="m-lbl">Leads Baru</div></div>
+          <div class="m-item"><div class="m-val">${s?.lFu||0}</div><div class="m-lbl">Di-Follow-up</div></div>
+          <div class="m-item"><div class="m-val">${s?.lHasil||0}</div><div class="m-lbl">Hasil FU</div></div>
+          <div class="m-item"><div class="m-val">${s?.lKonv||0}</div><div class="m-lbl">Terkonversi</div></div>
+        </div>
+        <div class="cvr-row">
+          <div class="cvr-label">
+            <span>Conversion Rate (FU → Daftar)</span>
+            <span class="cvr-pct">${pct}% <span class="badge ${cls}" style="font-size:10px;padding:2px 8px">${cvrLabel(pct)}</span></span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar ${bar}" style="width:${Math.min(pct,100)}%"></div></div>
+          <div style="margin-top:8px">
+            <div class="cvr-label">
+              <span>Follow-up Rate (Baru → FU)</span>
+              <span class="cvr-pct">${fuR}%</span>
+            </div>
+            <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(fuR,100)}%;background:var(--accent)"></div></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(err) {
+    console.error('Render staff cards error:', err);
+  }
 }
 
 // ─── Render Table ─────────────────────────────────────────
 async function renderTable(filterNama, dari, sampai){
-  const tbody = document.getElementById('rekap-tbody');
-  let rows = [];
+  try {
+    const tbody = document.getElementById('rekap-tbody');
+    if(!tbody) return;
+    
+    let rows = [];
 
-  if(IS_CONNECTED){
-    try{
-      const url  = `${API_URL}?action=list&nama=${encodeURIComponent(filterNama||'')}`;
-      const res  = await fetch(url);
-      const json = await res.json();
-      if(json.ok) rows = json.data;
-    }catch(e){
-      console.error('Render table error:', e);
+    if(IS_CONNECTED){
+      try{
+        const url  = `${API_URL}?action=list&nama=${encodeURIComponent(filterNama||'')}`;
+        const res  = await fetch(url);
+        const json = await res.json();
+        if(json.ok) rows = json.data || [];
+      }catch(e){
+        console.error('Fetch list error:', e);
+      }
+    } else {
+      let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
+      if(filterNama) all = all.filter(r=>r.nama===filterNama);
+      rows = all.reverse().map(r=>({
+        'ID':r.id,'Nama Staff':r.nama,'Tanggal':r.tgl,'Status Kehadiran':r.status,
+        'Leads Baru Masuk':r.lBaru,'Leads Di-Follow-up':r.lFu,
+        'Leads Terkonversi':r.lKonv,'Conversion Rate (%)':r.lFu>0?((r.lKonv/r.lFu)*100).toFixed(1):0,
+        'Checklist Aktivitas':Array.isArray(r.aktivitas)?r.aktivitas.join(', '):(r.aktivitas||''),
+        'Aktivitas Lainnya':r.aktLain||''
+      }));
     }
-  } else {
-    let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
-    if(filterNama) all = all.filter(r=>r.nama===filterNama);
-    rows = all.reverse().map(r=>({
-      'ID':r.id,'Nama Staff':r.nama,'Tanggal':r.tgl,'Status Kehadiran':r.status,
-      'Leads Baru Masuk':r.lBaru,'Leads Di-Follow-up':r.lFu,
-      'Leads Terkonversi':r.lKonv,'Conversion Rate (%)':r.lFu>0?((r.lKonv/r.lFu)*100).toFixed(1):0,
-      'Checklist Aktivitas':Array.isArray(r.aktivitas)?r.aktivitas.join(', '):(r.aktivitas||''),
-      'Aktivitas Lainnya':r.aktLain||''
-    }));
+
+    if(!rows || !rows.length){ 
+      tbody.innerHTML='<tr><td colspan="9"><div class="empty">Belum ada laporan</div></td></tr>'; 
+      return; 
+    }
+
+    tbody.innerHTML = rows.map(r=>{
+      const pct = parseFloat(r?.['Conversion Rate (%)']||0);
+      const fu  = parseInt(r?.['Leads Di-Follow-up'])||0;
+      const {cls,bar} = cvrClass(pct);
+      const akt = [r?.['Checklist Aktivitas'],r?.['Aktivitas Lainnya']].filter(Boolean).join(', ') || '—';
+      
+      return `<tr>
+        <td>${r?.['Tanggal']||'—'}</td>
+        <td><div class="td-name">${r?.['Nama Staff']||'—'}</div></td>
+        <td>${statusBadge(r?.['Status Kehadiran'])}</td>
+        <td style="text-align:center">${r?.['Leads Baru Masuk']||0}</td>
+        <td style="text-align:center">${fu}
+          <div class="mini-bar-wrap"><div class="mini-bar" style="background:var(--accent);width:${Math.min(fu/20*100,100)}%"></div></div>
+        </td>
+        <td style="text-align:center">${r?.['Leads Terkonversi']||0}</td>
+        <td>
+          <span class="badge ${cls}">${pct}%</span>
+          <div class="progress-wrap" style="width:80px;margin-top:5px"><div class="progress-bar ${bar}" style="width:${Math.min(pct,100)}%"></div></div>
+        </td>
+        <td style="max-width:180px;font-size:12px;color:var(--muted2)">${akt.substring(0,80)}${akt.length>80?'...':''}</td>
+        <td><button class="del-btn" onclick="deleteRow('${r?.['ID']}')">hapus</button></td>
+      </tr>`;
+    }).join('');
+  } catch(err) {
+    console.error('Render table error:', err);
   }
-
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="9"><div class="empty">Belum ada laporan</div></td></tr>'; return; }
-
-  tbody.innerHTML = rows.map(r=>{
-    const pct = parseFloat(r['Conversion Rate (%)']||0);
-    const fu  = parseInt(r['Leads Di-Follow-up'])||0;
-    const {cls,bar} = cvrClass(pct);
-    const akt = [r['Checklist Aktivitas'],r['Aktivitas Lainnya']].filter(Boolean).join(', ') || '—';
-    return `<tr>
-      <td>${r['Tanggal']||'—'}</td>
-      <td><div class="td-name">${r['Nama Staff']||'—'}</div></td>
-      <td>${statusBadge(r['Status Kehadiran'])}</td>
-      <td style="text-align:center">${r['Leads Baru Masuk']||0}</td>
-      <td style="text-align:center">${fu}
-        <div class="mini-bar-wrap"><div class="mini-bar" style="background:var(--accent);width:${Math.min(fu/20*100,100)}%"></div></div>
-      </td>
-      <td style="text-align:center">${r['Leads Terkonversi']||0}</td>
-      <td>
-        <span class="badge ${cls}">${pct}%</span>
-        <div class="progress-wrap" style="width:80px;margin-top:5px"><div class="progress-bar ${bar}" style="width:${Math.min(pct,100)}%"></div></div>
-      </td>
-      <td style="max-width:180px;font-size:12px;color:var(--muted2)">${akt.substring(0,80)}${akt.length>80?'...':''}</td>
-      <td><button class="del-btn" onclick="deleteRow('${r['ID']}')">hapus</button></td>
-    </tr>`;
-  }).join('');
 }
 
 // ─── Delete Row ───────────────────────────────────────────
 async function deleteRow(id){
-  if(!confirm('Hapus laporan ini?')) return;
+  if(!id || !confirm('Hapus laporan ini?')) return;
   
-  if(IS_CONNECTED){
-    try{
-      const res  = await fetch(`${API_URL}?action=delete&id=${id}`);
-      const json = await res.json();
-      if(!json.ok) throw new Error(json.error);
-    }catch(ex){ 
-      toast('❌ '+ex.message,true); 
-      return; 
+  try {
+    if(IS_CONNECTED){
+      try{
+        const res  = await fetch(`${API_URL}?action=delete&id=${id}`);
+        const json = await res.json();
+        if(!json.ok) throw new Error(json.error || 'Delete failed');
+      }catch(ex){ 
+        toast('❌ '+ex.message,true); 
+        return; 
+      }
+    } else {
+      let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
+      all = all.filter(r=>r.id!==id && r.id!==parseInt(id));
+      localStorage.setItem('akt-reports',JSON.stringify(all));
     }
-  } else {
-    let all = JSON.parse(localStorage.getItem('akt-reports')||'[]');
-    all = all.filter(r=>r.id!==id && r.id!==parseInt(id));
-    localStorage.setItem('akt-reports',JSON.stringify(all));
+    
+    toast('✓ Laporan dihapus');
+    loadRekap();
+  } catch(err) {
+    console.error('Delete error:', err);
   }
-  
-  toast('✓ Laporan dihapus');
-  loadRekap();
 }
 
 // ─── Auto-refresh rekap every 30s ────────────────────────
 setInterval(()=>{
-  if(document.getElementById('view-rekap').style.display !== 'none') loadRekap();
+  try {
+    const viewRekap = document.getElementById('view-rekap');
+    if(viewRekap && viewRekap.style.display !== 'none') {
+      loadRekap();
+    }
+  } catch(err) {
+    console.error('Auto-refresh error:', err);
+  }
 }, 30000);
 
+// ─── Start the app ───────────────────────────────────────
+console.log('Starting app...');
 init();
 </script>
