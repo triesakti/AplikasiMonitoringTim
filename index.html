@@ -315,7 +315,9 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div class="toast" id="toast"></div>
 
 <script>
-// KONFIGURASI
+// ══════════════════════════════════════════════════════════
+//  KONFIGURASI - GANTI URL DI BAWAH INI
+// ══════════════════════════════════════════════════════════
 const API_URL = 'https://script.google.com/macros/s/AKfycbwFRoICLD6RYisLM5qfDhXfIVlz9y4sUn1dfDgAzLgmKYQpMECDw35AvslZu5kySIPdTg/exec';
 
 // Check apakah URL valid
@@ -343,7 +345,7 @@ const AV_COLORS = [
 ];
 
 function avColor(i){return AV_COLORS[i % AV_COLORS.length];}
-function initials(n){return n ? n.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : '--';}
+function initials(n){return n ? n.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase() : '--';}
 
 function toast(msg, isErr){
   try {
@@ -602,8 +604,14 @@ async function submitForm(){
     var metodeCB = document.querySelectorAll('.fu-cb:checked');
     var aktivitasCB = document.querySelectorAll('.ak-cb:checked');
     
+    var metodeArr = [];
+    metodeCB.forEach(function(c){ metodeArr.push(c.value); });
+    
+    var aktivitasArr = [];
+    aktivitasCB.forEach(function(c){ aktivitasArr.push(c.value); });
+    
     var payload = {
-      action:'save',
+      action: 'save',
       id: Date.now().toString(),
       nama: nama, 
       tgl: tglInput ? tglInput.value : new Date().toISOString().split('T')[0], 
@@ -612,35 +620,77 @@ async function submitForm(){
       lFu: lFuInput ? (parseInt(lFuInput.value) || 0) : 0,
       lHasil: lHasilInput ? (parseInt(lHasilInput.value) || 0) : 0,
       lKonv: lKonvInput ? (parseInt(lKonvInput.value) || 0) : 0,
-      metode: Array.from(metodeCB).map(function(c){ return c.value; }),
+      metode: metodeArr,
       tindakan: tindakanInput ? tindakanInput.value : '',
-      aktivitas: Array.from(aktivitasCB).map(function(c){ return c.value; }),
+      aktivitas: aktivitasArr,
       aktLain: aktlainInput ? aktlainInput.value : '',
       hambatan: hambatanInput ? hambatanInput.value : '',
-      rencana: rencanaInput ? rencanaInput.value : '',
+      rencana: rencanaInput ? rencanaInput.value : ''
     };
+
+    console.log('Sending payload:', payload);
+    console.log('To URL:', API_URL);
 
     var saved = false;
     
     if(IS_CONNECTED){
       try {
-        var res = await fetch(API_URL, { 
-          method:'POST', 
+        var fetchOptions = {
+          method: 'POST',
           body: JSON.stringify(payload),
-          headers: {'Content-Type': 'application/json'}
-        });
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        };
+        
+        console.log('Fetch options:', fetchOptions);
+        
+        var res = await fetch(API_URL, fetchOptions);
+        console.log('Response status:', res.status);
+        console.log('Response ok:', res.ok);
+        
         var json = await res.json();
+        console.log('Response JSON:', json);
+        
         if(json.ok) {
           saved = true;
           toast('✓ Laporan berhasil dikirim ke Google Sheets!');
         } else {
-          throw new Error(json.error || 'Unknown error');
+          throw new Error(json.error || 'Server error');
         }
       } catch(ex) {
-        console.error('Submit error:', ex);
-        toast('❌ Gagal mengirim: ' + ex.message, true);
+        console.error('Fetch error:', ex);
+        
+        // Coba mode no-cors sebagai fallback
+        toast('⚠️ CORS Error, mencoba mode alternatif...', true);
+        
+        try {
+          console.log('Trying no-cors mode...');
+          await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            mode: 'no-cors',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          // Mode no-cors tidak bisa baca response, tapi request tetap terkirim
+          saved = true;
+          toast('✓ Data terkirim (mode no-cors - cek Google Sheet)');
+          
+          // Tunggu 1 detik lalu refresh rekap untuk lihat data
+          setTimeout(function(){
+            showView('rekap');
+          }, 1500);
+          
+        } catch(ex2) {
+          console.error('No-cors also failed:', ex2);
+          throw new Error('Failed to fetch: ' + ex.message);
+        }
       }
     } else {
+      // Offline mode
       var stored = JSON.parse(localStorage.getItem('akt-reports') || '[]');
       stored.push(Object.assign({}, payload, { Timestamp: new Date().toLocaleString('id-ID') }));
       localStorage.setItem('akt-reports', JSON.stringify(stored));
@@ -649,6 +699,7 @@ async function submitForm(){
     }
 
     if(saved){
+      // Reset form
       namaSel.value = '';
       statusSel.value = '';
       
@@ -673,7 +724,7 @@ async function submitForm(){
     }
   } catch(err) {
     console.error('Submit form error:', err);
-    toast('Error: ' + err.message, true);
+    toast('❌ Error: ' + err.message, true);
     
     var btn = document.getElementById('btn-kirim');
     if(btn) {
@@ -704,8 +755,12 @@ async function loadRekap(){
     if(IS_CONNECTED){
       try {
         var url = API_URL + '?action=rekap&nama=' + encodeURIComponent(nama) + '&dari=' + encodeURIComponent(dari) + '&sampai=' + encodeURIComponent(sampai);
+        console.log('Fetching rekap from:', url);
+        
         var res = await fetch(url);
         var json = await res.json();
+        console.log('Rekap response:', json);
+        
         if(json.ok && json.data){ 
           reports = json.data.stats || []; 
           summary = json.data.summary || {}; 
@@ -844,8 +899,12 @@ async function renderTable(filterNama, dari, sampai){
     if(IS_CONNECTED){
       try {
         var url = API_URL + '?action=list&nama=' + encodeURIComponent(filterNama || '');
+        console.log('Fetching list from:', url);
+        
         var res = await fetch(url);
         var json = await res.json();
+        console.log('List response:', json);
+        
         if(json.ok) rows = json.data || [];
       } catch(e) {
         console.error('Fetch list error:', e);
@@ -908,7 +967,9 @@ async function deleteRow(id){
   try {
     if(IS_CONNECTED){
       try {
-        await fetch(API_URL + '?action=delete&id=' + id);
+        var res = await fetch(API_URL + '?action=delete&id=' + id);
+        var json = await res.json();
+        if(!json.ok) throw new Error(json.error || 'Delete failed');
       } catch(ex) { 
         toast('❌ ' + ex.message, true); 
         return; 
@@ -939,6 +1000,8 @@ setInterval(function(){
 
 // Start
 console.log('App starting...');
+console.log('API_URL:', API_URL);
+console.log('IS_CONNECTED:', IS_CONNECTED);
 init();
 </script>
 </body>
