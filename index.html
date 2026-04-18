@@ -522,7 +522,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 // ══════════════════════════════════════════════════════════
 //  KONFIGURASI — Ganti dengan URL Google Apps Script Anda
 // ══════════════════════════════════════════════════════════
-const API_URL = 'GANTI_DENGAN_URL_APPS_SCRIPT_ANDA';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec';
 
 // ══════════════════════════════════════════════════════════
 //  State
@@ -531,7 +531,7 @@ let dashPeriod = 'week';
 let dashData   = { stats: [], summary: {}, allRows: [] };
 
 // ── Helpers ───────────────────────────────────────────────
-const isConnected = () => API_URL && API_URL !== 'GANTI_DENGAN_URL_APPS_SCRIPT_ANDA' && API_URL.startsWith('https://');
+const isConnected = () => API_URL && API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec' && API_URL.startsWith('https://');
 
 async function gasFetch(params, ms = 15000) {
   const url  = API_URL + '?' + new URLSearchParams(params).toString();
