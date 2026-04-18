@@ -149,6 +149,41 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .live-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;animation:pulse 2s ease infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .target-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+
+/* ── Modal Overlay ───────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal-box{background:var(--card);border:1px solid var(--border2);border-radius:var(--radius);padding:28px;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.modal-title{font-size:17px;font-weight:700;color:#fff;margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:22px;line-height:1.6}
+.modal-steps{counter-reset:step;list-style:none;margin:0 0 22px;padding:0}
+.modal-steps li{counter-increment:step;display:flex;gap:12px;margin-bottom:14px;font-size:13px;color:var(--muted2);align-items:flex-start}
+.modal-steps li::before{content:counter(step);min-width:24px;height:24px;background:rgba(79,110,247,.2);border:1px solid rgba(79,110,247,.35);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#8fa8ff;flex-shrink:0;margin-top:1px}
+.modal-steps li strong{color:#fff}
+.modal-steps li code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:4px;font-size:12px;color:#8fa8ff;font-family:monospace}
+.url-input-wrap{position:relative;margin-bottom:6px}
+.url-input-wrap input{width:100%;background:var(--input-bg);border:2px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:12px 44px 12px 14px;outline:none;font-family:monospace;transition:border-color .2s}
+.url-input-wrap input:focus{border-color:var(--accent)}
+.url-input-wrap input.valid{border-color:var(--green)}
+.url-input-wrap input.invalid{border-color:var(--red2)}
+.url-status{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:16px}
+.modal-hint{font-size:11px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.modal-btns{display:flex;gap:10px}
+.btn-connect{flex:1;background:linear-gradient(135deg,#4f6ef7,#6384ff);border:none;color:#fff;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .2s}
+.btn-connect:hover{opacity:.88}
+.btn-connect:disabled{opacity:.5;cursor:not-allowed}
+.btn-cancel{background:transparent;border:1.5px solid var(--border2);color:var(--muted2);padding:13px 20px;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-cancel:hover{border-color:var(--border2);color:#fff}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700}
+.pill-connected{background:rgba(29,158,117,.15);color:#5fd4a8;border:1px solid rgba(29,158,117,.3)}
+.pill-offline{background:rgba(212,160,23,.12);color:#f4cc5a;border:1px solid rgba(212,160,23,.25)}
+.dot-on{width:6px;height:6px;border-radius:50%;background:#5fd4a8;animation:pulse 2s infinite}
+.dot-off{width:6px;height:6px;border-radius:50%;background:#f4cc5a}
+.btn-settings{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border2);background:transparent;color:var(--muted2);transition:all .2s;font-family:inherit}
+.btn-settings:hover{border-color:var(--accent);color:#fff;background:rgba(79,110,247,.1)}
+.test-result{margin-top:14px;padding:12px 16px;border-radius:var(--radius-sm);font-size:12px;display:none;line-height:1.6}
+.test-ok{background:rgba(29,158,117,.1);border:1px solid rgba(29,158,117,.25);color:#5fd4a8}
+.test-err{background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.25);color:#e87070}
 </style>
 </head>
 <body>
@@ -163,18 +198,58 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="hdr-sub">Sistem Pelaporan Real-Time</div>
     </div>
   </div>
-  <nav class="nav">
-    <button class="nav-btn active" id="btn-form" onclick="showView('form')">📝 Input Laporan</button>
-    <button class="nav-btn" id="btn-rekap" onclick="showView('rekap')">📊 Rekap & Progress</button>
-  </nav>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div id="conn-status"></div>
+    <nav class="nav">
+      <button class="nav-btn active" id="btn-form" onclick="showView('form')">📝 Input Laporan</button>
+      <button class="nav-btn" id="btn-rekap" onclick="showView('rekap')">📊 Rekap & Progress</button>
+    </nav>
+    <button class="btn-settings" onclick="openModal()">⚙️ Koneksi</button>
+  </div>
 </header>
+
+<!-- ══ MODAL KONEKSI GOOGLE SHEETS ══════════════════════ -->
+<div class="modal-overlay hidden" id="conn-modal">
+  <div class="modal-box">
+    <div class="modal-title">🔗 Hubungkan ke Google Sheets</div>
+    <div class="modal-sub">Ikuti langkah-langkah berikut, lalu paste URL Web App Anda di bawah ini.</div>
+
+    <ol class="modal-steps">
+      <li><div><strong>Buka Google Sheets</strong> yang ingin digunakan → klik menu <strong>Extensions → Apps Script</strong></div></li>
+      <li><div><strong>Paste isi file <code>Code.gs</code></strong> (yang sudah diunduh) ke editor, lalu klik <strong>Save 💾</strong></div></li>
+      <li><div>Pilih fungsi <code>setupSheets</code> dari dropdown → klik <strong>▶️ Run</strong> → izinkan akses Google</div></li>
+      <li><div>Klik <strong>Deploy → New deployment → Web App</strong><br>Set: <em>Execute as: <strong>Me</strong></em> | <em>Who has access: <strong>Anyone</strong></em> → Deploy</div></li>
+      <li><div><strong>Salin URL</strong> yang muncul (format: <code>https://script.google.com/macros/s/.../exec</code>) → paste di bawah</div></li>
+    </ol>
+
+    <label style="display:block;font-size:12px;color:var(--muted2);font-weight:600;margin-bottom:8px">URL Google Apps Script Web App</label>
+    <div class="url-input-wrap">
+      <input type="text" id="modal-url" placeholder="https://script.google.com/macros/s/.../exec" oninput="validateUrl(this)"/>
+      <span class="url-status" id="url-status"></span>
+    </div>
+    <div class="modal-hint">Setelah paste URL → klik <strong>Test Koneksi</strong> untuk memastikan terhubung, lalu <strong>Simpan & Sambungkan</strong>.</div>
+
+    <div id="test-result" class="test-result"></div>
+
+    <div class="modal-btns" style="margin-top:18px">
+      <button class="btn-cancel" onclick="closeModal()">Batal</button>
+      <button class="btn-connect" id="btn-test" onclick="testConnection()" disabled>🔍 Test Koneksi</button>
+      <button class="btn-connect" id="btn-save-url" onclick="saveUrl()" disabled style="background:linear-gradient(135deg,#1D9E75,#5fd4a8)">✅ Simpan & Sambungkan</button>
+    </div>
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:11px;color:var(--muted)">Untuk reset koneksi:</span>
+      <button onclick="resetConnection()" style="background:none;border:none;color:var(--red2);font-size:12px;cursor:pointer;font-family:inherit;padding:4px 8px;border-radius:4px" onmouseover="this.style.background='rgba(192,57,43,.1)'" onmouseout="this.style.background='none'">🗑️ Hapus Koneksi</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ FORM VIEW ═════════════════════════════════════════ -->
 <main class="main" id="view-form">
 
   <!-- Config notice -->
-  <div class="cfg-notice" id="cfg-notice">
-    ⚙️ <strong>Mode Offline (Demo):</strong> Data disimpan di browser lokal saja. Untuk koneksi ke <strong>Google Sheets</strong>: (1) Paste <code>Code.gs</code> ke Apps Script → (2) Jalankan <code>setupSheets()</code> → (3) Deploy sebagai Web App → (4) Ganti nilai <code>API_URL</code> di baris ~362 dengan URL Web App Anda. Lihat <strong>SETUP.md</strong> untuk panduan lengkap.
+  <div class="cfg-notice" id="cfg-notice" style="display:none">
+    ⚙️ <strong>Mode Offline (Demo):</strong> Data disimpan di browser lokal saja. Klik tombol <strong>⚙️ Koneksi</strong> di pojok kanan atas untuk menghubungkan ke Google Sheets.
   </div>
 
   <!-- Identitas -->
@@ -348,13 +423,98 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <script>
 // ══════════════════════════════════════════════════════════
-//  KONFIGURASI
-//  Ganti nilai API_URL di bawah dengan URL Google Apps Script
-//  Web App Anda setelah deploy. Ikuti panduan di SETUP.md.
-//
-//  Contoh URL: https://script.google.com/macros/s/AKfyc.../exec
+//  KONFIGURASI DINAMIS — URL diambil dari localStorage
+//  Gunakan tombol ⚙️ Koneksi di header untuk mengaturnya
 // ══════════════════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec';
+const STORAGE_KEY_URL   = 'akt-api-url';
+const PLACEHOLDER_URL   = 'GANTI_DENGAN_URL_APPS_SCRIPT_ANDA';
+
+// Ambil URL dari localStorage, fallback ke placeholder
+function getApiUrl(){ return localStorage.getItem(STORAGE_KEY_URL) || PLACEHOLDER_URL; }
+function isConnected(){ const u = getApiUrl(); return u && u !== PLACEHOLDER_URL && u.startsWith('https://'); }
+
+// ─── Modal Koneksi ────────────────────────────────────────
+function openModal(){
+  const saved = getApiUrl();
+  const inp = document.getElementById('modal-url');
+  inp.value = saved !== PLACEHOLDER_URL ? saved : '';
+  validateUrl(inp);
+  document.getElementById('test-result').style.display='none';
+  document.getElementById('conn-modal').classList.remove('hidden');
+}
+function closeModal(){ document.getElementById('conn-modal').classList.add('hidden'); }
+
+function validateUrl(inp){
+  const v = inp.value.trim();
+  const ok = v.startsWith('https://script.google.com/macros/s/') && v.endsWith('/exec');
+  document.getElementById('url-status').textContent = v ? (ok ? '✅' : '❌') : '';
+  inp.className = v ? (ok ? 'valid' : 'invalid') : '';
+  document.getElementById('btn-test').disabled     = !ok;
+  document.getElementById('btn-save-url').disabled = !ok;
+}
+
+async function testConnection(){
+  const url = document.getElementById('modal-url').value.trim();
+  const res  = document.getElementById('test-result');
+  const btn  = document.getElementById('btn-test');
+  btn.disabled = true; btn.textContent = '⏳ Menguji...';
+  res.style.display='none';
+  try{
+    const r    = await fetch(`${url}?action=staff`);
+    const json = await r.json();
+    if(json.ok !== undefined){
+      res.className='test-result test-ok';
+      res.innerHTML = `✅ <strong>Koneksi berhasil!</strong> Terdeteksi ${json.data?.length ?? 0} staff di Google Sheets. Silakan klik <strong>Simpan & Sambungkan</strong>.`;
+    } else {
+      throw new Error('Response tidak valid dari server');
+    }
+  }catch(e){
+    res.className='test-result test-err';
+    res.innerHTML = `❌ <strong>Koneksi gagal.</strong> Pastikan:<br>
+      • Apps Script sudah di-deploy dengan akses <strong>Anyone</strong><br>
+      • URL yang dipaste sudah benar (berakhiran <code>/exec</code>)<br>
+      • Fungsi <code>setupSheets()</code> sudah pernah dijalankan<br>
+      <em style="opacity:.7">Detail: ${e.message}</em>`;
+  }
+  res.style.display='block';
+  btn.disabled=false; btn.textContent='🔍 Test Koneksi';
+}
+
+function saveUrl(){
+  const url = document.getElementById('modal-url').value.trim();
+  localStorage.setItem(STORAGE_KEY_URL, url);
+  closeModal();
+  updateConnectionStatus();
+  toast('✅ Koneksi ke Google Sheets berhasil disimpan!');
+  loadStaff();
+  if(document.getElementById('view-rekap').style.display !== 'none') loadRekap();
+}
+
+function resetConnection(){
+  if(!confirm('Hapus koneksi Google Sheets? Data offline di browser tidak akan hilang.')) return;
+  localStorage.removeItem(STORAGE_KEY_URL);
+  updateConnectionStatus();
+  closeModal();
+  toast('🔌 Koneksi direset. Mode offline aktif.');
+}
+
+function updateConnectionStatus(){
+  const el = document.getElementById('conn-status');
+  const notice = document.getElementById('cfg-notice');
+  if(isConnected()){
+    el.innerHTML = `<div class="status-pill pill-connected"><div class="dot-on"></div>Google Sheets</div>`;
+    notice.style.display = 'none';
+  } else {
+    el.innerHTML = `<div class="status-pill pill-offline"><div class="dot-off"></div>Mode Offline</div>`;
+    notice.style.display = 'block';
+  }
+}
+
+// Tutup modal jika klik di luar box
+document.addEventListener('click', e=>{
+  const modal = document.getElementById('conn-modal');
+  if(e.target === modal) closeModal();
+});
 
 // ─── Avatar Colors ────────────────────────────────────────
 const AV_COLORS = [
@@ -396,6 +556,7 @@ function statusBadge(s){
 
 // ─── Init ─────────────────────────────────────────────────
 async function init(){
+  updateConnectionStatus();
   document.getElementById('f-tgl').value = new Date().toISOString().split('T')[0];
   await loadStaff();
 
@@ -415,9 +576,9 @@ async function loadStaff(){
   const localExtra = JSON.parse(localStorage.getItem('akt-staff-extra')||'[]');
   let names = [...defaults, ...localExtra.filter(n=>!defaults.includes(n))];
 
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      const res = await fetch(`${API_URL}?action=staff`);
+      const res = await fetch(`${getApiUrl()}?action=staff`);
       const json = await res.json();
       if(json.ok && json.data.length) names = json.data.map(s=>s['Nama Staff']);
     }catch{}
@@ -442,9 +603,9 @@ async function tambahStaff(){
   if(!nama){ toast('⚠️ Nama staff harus diisi!', true); return; }
 
   // Save to API if connected
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'save_staff', nama, jabatan }) });
+      await fetch(getApiUrl(), { method:'POST', body: JSON.stringify({ action:'save_staff', nama, jabatan }) });
     }catch{}
   }
 
@@ -516,9 +677,9 @@ async function submitForm(){
   };
 
   let saved = false;
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      const res  = await fetch(API_URL, { method:'POST', body: JSON.stringify(payload) });
+      const res  = await fetch(getApiUrl(), { method:'POST', body: JSON.stringify(payload) });
       const json = await res.json();
       if(json.ok) saved = true;
       else throw new Error(json.error);
@@ -560,9 +721,9 @@ async function loadRekap(){
 
   let reports = [], summary = {};
 
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      const url  = `${API_URL}?action=rekap&nama=${encodeURIComponent(nama)}&dari=${dari}&sampai=${sampai}`;
+      const url  = `${getApiUrl()}?action=rekap&nama=${encodeURIComponent(nama)}&dari=${dari}&sampai=${sampai}`;
       const res  = await fetch(url);
       const json = await res.json();
       if(json.ok){ reports = json.data.stats; summary = json.data.summary; }
@@ -658,9 +819,9 @@ async function renderTable(filterNama, dari, sampai){
   const tbody = document.getElementById('rekap-tbody');
   let rows = [];
 
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      const url  = `${API_URL}?action=list&nama=${encodeURIComponent(filterNama||'')}`;
+      const url  = `${getApiUrl()}?action=list&nama=${encodeURIComponent(filterNama||'')}`;
       const res  = await fetch(url);
       const json = await res.json();
       if(json.ok) rows = json.data;
@@ -706,9 +867,9 @@ async function renderTable(filterNama, dari, sampai){
 // ─── Delete Row ───────────────────────────────────────────
 async function deleteRow(id){
   if(!confirm('Hapus laporan ini?')) return;
-  if(API_URL !== 'https://script.google.com/macros/s/AKfycbzNd0as8W8SbQ1IMSSvUJbBiCU0scRo6Fe4QDainXnehoijYBBTOgA-DJBUfddOwGCKQg/exec'){
+  if(isConnected()){
     try{
-      const res  = await fetch(`${API_URL}?action=delete&id=${id}`);
+      const res  = await fetch(`${getApiUrl()}?action=delete&id=${id}`);
       const json = await res.json();
       if(!json.ok) throw new Error(json.error);
     }catch(ex){ toast('❌ '+ex.message,true); return; }
